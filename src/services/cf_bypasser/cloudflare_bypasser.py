@@ -3,8 +3,6 @@ import os
 import socket
 from urllib.parse import urlparse
 import threading
-import env
-from env import LOG_DIR, DEBUG
 import signal
 from datetime import datetime
 import subprocess
@@ -18,12 +16,16 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 
-import network
-from logger import setup_logger
-from env import MAX_RETRY, DEFAULT_SLEEP
-from config import PROXIES, CUSTOM_DNS, DOH_SERVER, VIRTUAL_SCREEN_SIZE, RECORDING_DIR
+import src.services.network as network
+from src.logger import setup_logger
+from config.settings import (
+    LOG_DIR, DEBUG, MAX_RETRY, DEFAULT_SLEEP, PROXIES, CUSTOM_DNS, 
+    DOH_SERVER, VIRTUAL_SCREEN_SIZE, RECORDING_DIR, LOG_FILE, 
+    LOG_LEVEL, ENABLE_LOGGING, DOCKERMODE, USE_CF_BYPASS, 
+    BYPASS_RELEASE_INACTIVE_MIN
+)
 
-logger = setup_logger(__name__)
+logger = setup_logger(__name__, LOG_FILE, LOG_LEVEL, ENABLE_LOGGING)
 network.init()
 
 DRIVER = None
@@ -360,7 +362,7 @@ def _get_driver():
     global LAST_USED
     logger.info("Getting driver...")
     LAST_USED = time.time()
-    if env.DOCKERMODE and env.USE_CF_BYPASS and not DISPLAY["xvfb"]:
+    if DOCKERMODE and USE_CF_BYPASS and not DISPLAY["xvfb"]:
         from pyvirtualdisplay import Display
         display = Display(visible=False, size=VIRTUAL_SCREEN_SIZE)
         display.start()
@@ -369,7 +371,7 @@ def _get_driver():
         time.sleep(DEFAULT_SLEEP)
         _reset_pyautogui_display_state()
 
-        if env.DEBUG:
+        if DEBUG:
             timestamp = datetime.now().strftime("%y%m%d-%H%M%S")
             output_file = RECORDING_DIR / f"screen_recording_{timestamp}.mp4"
 
@@ -448,7 +450,7 @@ def _cleanup_driver():
     global LAST_USED
     with LOCKED:
         if LAST_USED:
-            if time.time() - LAST_USED >= env.BYPASS_RELEASE_INACTIVE_MIN * 60:
+            if time.time() - LAST_USED >= BYPASS_RELEASE_INACTIVE_MIN * 60:
                 _reset_driver()
                 LAST_USED = None
                 logger.info("Driver reset due to inactivity.")
@@ -456,7 +458,7 @@ def _cleanup_driver():
 def _cleanup_loop():
     while True:
         _cleanup_driver()
-        time.sleep(max(env.BYPASS_RELEASE_INACTIVE_MIN / 2, 1))
+        time.sleep(max(BYPASS_RELEASE_INACTIVE_MIN / 2, 1))
 
 def _init_cleanup_thread():
     cleanup_thread = threading.Thread(target=_cleanup_loop)

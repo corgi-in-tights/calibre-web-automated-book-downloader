@@ -1,6 +1,6 @@
 """Network operations manager for the book downloader application."""
 
-import network
+import src.services.network as network
 network.init()
 import requests
 import time
@@ -10,16 +10,18 @@ from urllib.parse import urlparse
 from tqdm import tqdm
 from typing import Callable
 from threading import Event
-from logger import setup_logger
-from config import PROXIES
-from env import MAX_RETRY, DEFAULT_SLEEP, USE_CF_BYPASS, USING_EXTERNAL_BYPASSER
+from src.logger import setup_logger
+from config.settings import (
+    PROXIES, MAX_RETRY, DEFAULT_SLEEP, USE_CF_BYPASS, USING_EXTERNAL_BYPASSER,
+    LOG_FILE, LOG_LEVEL, ENABLE_LOGGING
+)
 if USE_CF_BYPASS:
     if USING_EXTERNAL_BYPASSER:
         from cloudflare_bypasser_external import get_bypassed_page
     else:
         from cloudflare_bypasser import get_bypassed_page
 
-logger = setup_logger(__name__)
+logger = setup_logger(__name__, LOG_FILE, LOG_LEVEL, ENABLE_LOGGING)
 
 
 def html_get_page(url: str, retry: int = MAX_RETRY, use_bypasser: bool = False) -> str:

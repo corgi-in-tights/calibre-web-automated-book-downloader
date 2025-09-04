@@ -10,11 +10,15 @@ import urllib.parse
 import ssl
 import ipaddress
 
-from logger import setup_logger
-from config import PROXIES, AA_BASE_URL, CUSTOM_DNS, AA_AVAILABLE_URLS, DOH_SERVER
-import config
+from src.logger import setup_logger
+from config.settings import (
+    PROXIES, AA_BASE_URL, CUSTOM_DNS, AA_AVAILABLE_URLS, DOH_SERVER,
+    LOG_FILE, LOG_LEVEL, ENABLE_LOGGING
+)
 
-logger = setup_logger(__name__)
+logger = setup_logger(__name__, LOG_FILE, LOG_LEVEL, ENABLE_LOGGING)
+
+# NOTE from reyaan: i aint touching this with a 6 foot pole but all ill say is this thing is a mess
 
 # Common helper functions for DNS resolution
 def _decode_host(host: Union[str, bytes, None]) -> str:
@@ -333,7 +337,6 @@ if AA_BASE_URL == "auto":
             logger.error_trace(f"Error checking {url}: {e}")
     if AA_BASE_URL == "auto":
         AA_BASE_URL = AA_AVAILABLE_URLS[0]
-config.AA_BASE_URL = AA_BASE_URL
 logger.info(f"AA_BASE_URL: {AA_BASE_URL}")
 
 # Configure urllib opener with appropriate headers

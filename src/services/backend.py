@@ -9,13 +9,16 @@ import os
 from concurrent.futures import ThreadPoolExecutor, Future
 from threading import Event
 
-from logger import setup_logger
-from config import CUSTOM_SCRIPT
-from env import INGEST_DIR, TMP_DIR, MAIN_LOOP_SLEEP_TIME, USE_BOOK_TITLE, MAX_CONCURRENT_DOWNLOADS, DOWNLOAD_PROGRESS_UPDATE_INTERVAL
-from models import book_queue, BookInfo, QueueStatus, SearchFilters
+from src.logger import setup_logger
+from config.settings import (
+    CUSTOM_SCRIPT, INGEST_DIR, TMP_DIR, MAIN_LOOP_SLEEP_TIME, USE_BOOK_TITLE, 
+    MAX_CONCURRENT_DOWNLOADS, DOWNLOAD_PROGRESS_UPDATE_INTERVAL, LOG_FILE, 
+    LOG_LEVEL, ENABLE_LOGGING
+)
+from src.services.models import book_queue, BookInfo, QueueStatus, SearchFilters
 import book_manager
 
-logger = setup_logger(__name__)
+logger = setup_logger(__name__, LOG_FILE, LOG_LEVEL, ENABLE_LOGGING)
 
 def _sanitize_filename(filename: str) -> str:
     """Sanitize a filename by replacing spaces with underscores and removing invalid characters."""

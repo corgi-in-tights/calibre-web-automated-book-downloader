@@ -3,17 +3,17 @@ import time
 import os
 import hashlib
 
-# Thee server is already running, so let's grab some of the env vars:
+# These server is already running, so let's grab some of the settings:
 # Use absolute import since the script is run from the root directory
-import env as SERVER_ENV
+from config.settings import FLASK_PORT, INGEST_DIR, USE_BOOK_TITLE
 from backend import _sanitize_filename # Moved import to top level
 
 # Now let's test the server:
-port = SERVER_ENV.FLASK_PORT
+port = FLASK_PORT
 server_url = f"http://localhost:{port}"
 book_title = "077484a10743e5dd5d151013e8c732f4" # "Moby Dick"
 # Directory where downloads should appear
-download_dir = SERVER_ENV.INGEST_DIR
+download_dir = INGEST_DIR
 # Timeout for waiting for download
 download_timeout_seconds = 60 * 5
 # Polling interval
@@ -109,7 +109,7 @@ print(f"Book {book_id} download confirmed as available.")
 # Step 5 : Verify the file exists locally (optional but good)
 print(f"Step 5: Verifying downloaded file exists...")
 # Depend if env.USE_TITLE is true or false, the filename will be different
-if SERVER_ENV.USE_BOOK_TITLE:
+if USE_BOOK_TITLE:
     # Ensure book_details is available; might need adjustment if Step 2 failed
     # Assuming book_details was successfully fetched in Step 2
     title_to_sanitize = book_details.get('title', book_title) # Use fetched title if available

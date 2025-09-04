@@ -15,11 +15,11 @@ An intuitive web interface for searching and requesting book downloads, designed
 
 ## 🖼️ Screenshots
 
-![Main search interface Screenshot](README_images/search.png 'Main search interface')
+![Main search interface Screenshot](docs/images/search.png 'Main search interface')
 
-![Details modal Screenshot placeholder](README_images/details.png 'Details modal')
+![Details modal Screenshot placeholder](docs/images/details.png 'Details modal')
 
-![Download queue Screenshot placeholder](README_images/downloading.png 'Download queue')
+![Download queue Screenshot placeholder](docs/images/downloading.png 'Download queue')
 
 ## 🚀 Quick Start
 

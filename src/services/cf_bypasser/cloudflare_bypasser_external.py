@@ -1,13 +1,16 @@
-from logger import setup_logger
+from src.logger import setup_logger
 from typing import Optional
 import requests
 
 try:
-    from env import EXT_BYPASSER_PATH, EXT_BYPASSER_TIMEOUT, EXT_BYPASSER_URL
+    from config.settings import (
+        EXT_BYPASSER_PATH, EXT_BYPASSER_TIMEOUT, EXT_BYPASSER_URL,
+        LOG_FILE, LOG_LEVEL, ENABLE_LOGGING
+    )
 except ImportError:
     raise RuntimeError("Failed to import environment variables. Are you using an `extbp` image?")
 
-logger = setup_logger(__name__)
+logger = setup_logger(__name__, LOG_FILE, LOG_LEVEL, ENABLE_LOGGING)
 
 
 def get_bypassed_page(url: str) -> Optional[str]:

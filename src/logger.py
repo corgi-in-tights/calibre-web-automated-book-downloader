@@ -4,8 +4,11 @@ import logging
 import sys
 from pathlib import Path
 from logging.handlers import RotatingFileHandler
-from env import LOG_FILE, ENABLE_LOGGING, LOG_LEVEL
 from typing import Any
+
+
+# TODO get rid of this bitch
+
 
 class CustomLogger(logging.Logger):
     """Custom logger class with additional error_trace method."""
@@ -39,12 +42,14 @@ class CustomLogger(logging.Logger):
         self.debug(f"Container Memory: Available={available_mb:.2f} MB, Used={memory_used_mb:.2f} MB, CPU: {cpu_percent:.2f}%")
 
 
-def setup_logger(name: str, log_file: Path = LOG_FILE) -> CustomLogger:
+def setup_logger(name: str, log_file: Path = None, log_level: str = "INFO", enable_logging: bool = True) -> CustomLogger:
     """Set up and configure a logger instance.
     
     Args:
         name: The name of the logger instance
         log_file: Optional path to log file. If None, logs only to stdout/stderr
+        log_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+        enable_logging: Whether to enable file logging
         
     Returns:
         CustomLogger: Configured logger instance with error_trace method
@@ -54,18 +59,17 @@ def setup_logger(name: str, log_file: Path = LOG_FILE) -> CustomLogger:
     
     # Create logger as CustomLogger instance
     logger = CustomLogger(name)
-    log_level = logging.INFO
-    if LOG_LEVEL == "DEBUG":
-        log_level = logging.DEBUG
-    elif LOG_LEVEL == "INFO":
-        log_level = logging.INFO
-    elif LOG_LEVEL == "WARNING":
-        log_level = logging.WARNING
-    elif LOG_LEVEL == "ERROR":
-        log_level = logging.ERROR
-    elif LOG_LEVEL == "CRITICAL":
-        log_level = logging.CRITICAL
-    logger.setLevel(log_level)
+    
+    # Set log level
+    level_map = {
+        "DEBUG": logging.DEBUG,
+        "INFO": logging.INFO,
+        "WARNING": logging.WARNING,
+        "ERROR": logging.ERROR,
+        "CRITICAL": logging.CRITICAL
+    }
+    log_level_obj = level_map.get(log_level.upper(), logging.INFO)
+    logger.setLevel(log_level_obj)
     
     formatter = logging.Formatter(
         '%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s'
@@ -74,7 +78,7 @@ def setup_logger(name: str, log_file: Path = LOG_FILE) -> CustomLogger:
     # Console handler for Docker output
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(formatter)
-    console_handler.setLevel(log_level)
+    console_handler.setLevel(log_level_obj)
     console_handler.addFilter(lambda record: record.levelno < logging.ERROR)  # Only allow logs below ERROR to stdout
     logger.addHandler(console_handler)
     
@@ -84,9 +88,9 @@ def setup_logger(name: str, log_file: Path = LOG_FILE) -> CustomLogger:
     error_handler.setFormatter(formatter)
     logger.addHandler(error_handler)
     
-    # File handler if log file is specified
+    # File handler if log file is specified and logging is enabled
     try:
-        if ENABLE_LOGGING:
+        if enable_logging and log_file:
             # Create log directory if it doesn't exist
             log_dir = log_file.parent
             log_dir.mkdir(parents=True, exist_ok=True)
