@@ -39,7 +39,7 @@ def create_app():
     werkzeug_logger.setLevel(logger.level)
 
     # Register blueprints
-    from .blueprint import main_bp
+    from .routes import main_bp
     app.register_blueprint(main_bp)
     
     # Register dual routes (with /request prefix)

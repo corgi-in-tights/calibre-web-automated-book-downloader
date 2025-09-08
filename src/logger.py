@@ -10,39 +10,17 @@ from typing import Any
 # TODO get rid of this bitch
 
 
-class CustomLogger(logging.Logger):
-    """Custom logger class with additional error_trace method."""
-    
-    def error_trace(self, msg: Any, *args: Any, **kwargs: Any) -> None:
-        """Log an error message with full stack trace."""
-        self.log_resource_usage()
-        self.error(msg, *args, exc_info=True, **kwargs)
-
-    def warning_trace(self, msg: Any, *args: Any, **kwargs: Any) -> None:
-        """Log a warning message with full stack trace."""
-        self.log_resource_usage()
-        self.warning(msg, *args, exc_info=True, **kwargs)
-    
-    def info_trace(self, msg: Any, *args: Any, **kwargs: Any) -> None:
-        """Log an info message with full stack trace."""
-        self.log_resource_usage()
-        self.info(msg, *args, exc_info=True, **kwargs)
-    
-    def debug_trace(self, msg: Any, *args: Any, **kwargs: Any) -> None:
-        """Log a debug message with full stack trace."""
-        self.log_resource_usage()
-        self.debug(msg, *args, exc_info=True, **kwargs)
-    
-    def log_resource_usage(self):
-        import psutil
-        memory = psutil.virtual_memory()
-        available_mb = memory.available / (1024 * 1024)
-        memory_used_mb = memory.used / (1024 * 1024)
-        cpu_percent = psutil.cpu_percent()
-        self.debug(f"Container Memory: Available={available_mb:.2f} MB, Used={memory_used_mb:.2f} MB, CPU: {cpu_percent:.2f}%")
+def log_resource_usage(logger: logging.Logger) -> None:
+    """Log current resource usage (memory and CPU)."""
+    import psutil
+    memory = psutil.virtual_memory()
+    available_mb = memory.available / (1024 * 1024)
+    memory_used_mb = memory.used / (1024 * 1024)
+    cpu_percent = psutil.cpu_percent()
+    logger.debug(f"Container Memory: Available={available_mb:.2f} MB, Used={memory_used_mb:.2f} MB, CPU: {cpu_percent:.2f}%")
 
 
-def setup_logger(name: str, log_file: Path = None, log_level: str = "INFO", enable_logging: bool = True) -> CustomLogger:
+def setup_logger(name: str, log_file: Path = None, log_level: str = "INFO", enable_logging: bool = True) -> logging.Logger:
     """Set up and configure a logger instance.
     
     Args:
@@ -52,13 +30,10 @@ def setup_logger(name: str, log_file: Path = None, log_level: str = "INFO", enab
         enable_logging: Whether to enable file logging
         
     Returns:
-        CustomLogger: Configured logger instance with error_trace method
+        logging.Logger: Configured logger instance
     """
-    # Register our custom logger class
-    logging.setLoggerClass(CustomLogger)
-    
-    # Create logger as CustomLogger instance
-    logger = CustomLogger(name)
+    # Create logger
+    logger = logging.getLogger(name)
     
     # Set log level
     level_map = {
@@ -102,7 +77,6 @@ def setup_logger(name: str, log_file: Path = None, log_level: str = "INFO", enab
             file_handler.setFormatter(formatter)
             logger.addHandler(file_handler)
     except Exception as e:
-        logger.error_trace(f"Failed to create log file: {e}", exc_info=True)
+        logger.error(f"Failed to create log file: {e}", exc_info=True)
 
     return logger
-
