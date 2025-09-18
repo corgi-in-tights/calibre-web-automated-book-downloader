@@ -1,47 +1,42 @@
 import os
-from typing import Optional
-from threading import RLock
-from config.settings import Settings
+import threading
+from types import ModuleType
+from typing import Any
 
-"""
-Exists to manage lazy loading of settings configuration. Designed to be able to support thread-safe dynamic reloading, different settings environments, etc.
-Personally not a big fan of importing directly from settings.py, conf should be loaded only when the app lifecycle calls for it/provided by environment.
-"""
+from utils.import_utils import load_module_by_name
 
-_settings: Optional[Settings] = None
-_lock = RLock()
+_settings: ModuleType | None = None
+_lock = threading.RLock()
 
 def get_settings_path() -> str:
-    return os.getenv("SETTINGS_PATH", "config/settings.py")
+    """Return the current settings module path."""
+    return os.getenv("CWA_BD_SETTINGS_MODULE", "config.settings")
 
-def load_settings(settings_path: Optional[str] = None) -> Settings:
-    return Settings(settings_path or get_settings_path())
+def load_settings(temp_settings_path: str | None = None) -> None:
+    global _settings  # noqa: PLW0603
+    path = temp_settings_path or get_settings_path()
+    _settings = load_module_by_name(path)
+    return _settings
 
-def get_settings() -> Settings:
-    global _settings
+def get_settings():
+    """Load settings once, cache result, and return the Settings instance."""
     if _settings is None:
         with _lock:
             if _settings is None:
-                _settings = load_settings()
+                load_settings()
     return _settings
 
-def set_settings(settings_instance: Settings) -> None:
-    global _settings
-    with _lock:
-        _settings = settings_instance
 
-def reload_settings(settings_path: Optional[str] = None) -> Settings:
-    """Force re-read from disk/env (e.g., SIGHUP handler or admin endpoint)."""
-    new_settings = load_settings(settings_path)
-    set_settings(new_settings)
-    return new_settings
+class _LazySettingsProxy:
+    """Proxy object to access settings attributes lazily."""
 
-# Django-like attribute access *without* eager import
-class _LazySettings:
-    def __getattr__(self, name: str):
+    def __getattr__(self, name: str) -> Any:
         return getattr(get_settings(), name)
 
-settings = _LazySettings()
+    def __dir__(self):
+        return dir(get_settings())
 
+# attribute accesss for convenience
+settings = _LazySettingsProxy()
 
-__all__ = ['settings', 'get_settings', 'set_settings']
+__all__ = ["get_settings", "settings"]

@@ -1,37 +1,36 @@
 """Network operations manager for the book downloader application."""
 
 import src.services.network as network
-network.init()
-import requests
 import time
 from io import BytesIO
-from typing import Optional
-from urllib.parse import urlparse
-from tqdm import tqdm
-from typing import Callable
 from threading import Event
-from src.logger import setup_logger
-from config.settings import (
-    PROXIES, MAX_RETRY, DEFAULT_SLEEP, USE_CF_BYPASS, USING_EXTERNAL_BYPASSER,
-    LOG_FILE, LOG_LEVEL, ENABLE_LOGGING
-)
+from typing import Callable, Optional
+from urllib.parse import urlparse
+
+import requests
+from tqdm import tqdm
+
+from utils.logger_utils import get_logger
+
+network.init()
+
 if USE_CF_BYPASS:
     if USING_EXTERNAL_BYPASSER:
         from cloudflare_bypasser_external import get_bypassed_page
     else:
         from cloudflare_bypasser import get_bypassed_page
 
-logger = setup_logger(__name__, LOG_FILE, LOG_LEVEL, ENABLE_LOGGING)
+logger = get_logger(__name__)
 
 
 def html_get_page(url: str, retry: int = MAX_RETRY, use_bypasser: bool = False) -> str:
     """Fetch HTML content from a URL with retry mechanism.
-    
+
     Args:
         url: Target URL
         retry: Number of retry attempts
         skip_404: Whether to skip 404 errors
-        
+
     Returns:
         str: HTML content if successful, None otherwise
     """
@@ -48,12 +47,12 @@ def html_get_page(url: str, retry: int = MAX_RETRY, use_bypasser: bool = False) 
             logger.debug(f"Success getting: {url}")
             time.sleep(1)
         return str(response.text)
-        
+
     except Exception as e:
         if retry == 0:
             logger.error_trace(f"Failed to fetch page: {url}, error: {e}")
             return ""
-        
+
         if use_bypasser and USE_CF_BYPASS:
             logger.warning(f"Exception while using cloudflare bypass for URL: {url}")
             logger.warning(f"Exception: {e}")
@@ -64,20 +63,24 @@ def html_get_page(url: str, retry: int = MAX_RETRY, use_bypasser: bool = False) 
         elif response is not None and response.status_code == 403:
             logger.warning(f"403 detected for URL: {url}. Should retry using cloudflare bypass.")
             return html_get_page(url, retry - 1, True)
-            
+
         sleep_time = DEFAULT_SLEEP * (MAX_RETRY - retry + 1)
-        logger.warning(
-            f"Retrying GET {url} in {sleep_time} seconds due to error: {e}"
-        )
+        logger.warning(f"Retrying GET {url} in {sleep_time} seconds due to error: {e}")
         time.sleep(sleep_time)
         return html_get_page(url, retry - 1, use_bypasser)
 
-def download_url(link: str, size: str = "", progress_callback: Optional[Callable[[float], None]] = None, cancel_flag: Optional[Event] = None) -> Optional[BytesIO]:
+
+def download_url(
+    link: str,
+    size: str = "",
+    progress_callback: Optional[Callable[[float], None]] = None,
+    cancel_flag: Optional[Event] = None,
+) -> Optional[BytesIO]:
     """Download content from URL into a BytesIO buffer.
-    
+
     Args:
         link: URL to download from
-        
+
     Returns:
         BytesIO: Buffer containing downloaded content if successful
     """
@@ -86,17 +89,17 @@ def download_url(link: str, size: str = "", progress_callback: Optional[Callable
         response = requests.get(link, stream=True, proxies=PROXIES)
         response.raise_for_status()
 
-        total_size : float = 0.0
+        total_size: float = 0.0
         try:
             # we assume size is in MB
             total_size = float(size.strip().replace(" ", "").replace(",", ".").upper()[:-2].strip()) * 1024 * 1024
         except:
-            total_size = float(response.headers.get('content-length', 0))
-        
+            total_size = float(response.headers.get("content-length", 0))
+
         buffer = BytesIO()
 
         # Initialize the progress bar with your guess
-        pbar = tqdm(total=total_size, unit='B', unit_scale=True, desc='Downloading')
+        pbar = tqdm(total=total_size, unit="B", unit_scale=True, desc="Downloading")
         for chunk in response.iter_content(chunk_size=1000):
             buffer.write(chunk)
             pbar.update(len(chunk))
@@ -105,11 +108,11 @@ def download_url(link: str, size: str = "", progress_callback: Optional[Callable
             if cancel_flag is not None and cancel_flag.is_set():
                 logger.info(f"Download cancelled: {link}")
                 return None
-            
+
         pbar.close()
         if buffer.tell() * 0.1 < total_size * 0.9:
             # Check the content of the buffer if its HTML or binary
-            if response.headers.get('content-type', '').startswith('text/html'):
+            if response.headers.get("content-type", "").startswith("text/html"):
                 logger.warn(f"Failed to download content for {link}. Found HTML content instead.")
                 return None
         return buffer
@@ -117,9 +120,10 @@ def download_url(link: str, size: str = "", progress_callback: Optional[Callable
         logger.error_trace(f"Failed to download from {link}: {e}")
         return None
 
+
 def get_absolute_url(base_url: str, url: str) -> str:
     """Get absolute URL from relative URL and base URL.
-    
+
     Args:
         base_url: Base URL
         url: Relative URL

@@ -1,27 +1,29 @@
 """Book download manager handling search and retrieval operations."""
 
-import time, json, re
+import json
+import re
+import time
 from pathlib import Path
-from urllib.parse import quote
-from typing import List, Optional, Dict, Union, Callable
 from threading import Event
-from bs4 import BeautifulSoup, Tag, NavigableString, ResultSet
+from typing import Callable, Dict, List, Optional,
+from urllib.parse import quote
 
-import .downloader as downloader
-from .logger import setup_logger
-from config.settings import (
-    SUPPORTED_FORMATS, BOOK_LANGUAGE, AA_BASE_URL, AA_DONATOR_KEY, 
-    USE_CF_BYPASS, PRIORITIZE_WELIB, LOG_FILE, LOG_LEVEL, ENABLE_LOGGING
-)
-from src.services.models import BookInfo, SearchFilters
+from bs4 import BeautifulSoup, NavigableString, Tag
 
-logger = setup_logger(__name__, LOG_FILE, LOG_LEVEL, ENABLE_LOGGING)
+
+from src.models import BookInfo, SearchFilters
+
+from utils.logger_utils import get_logger
+
+from .. import downloader
+
+logger = get_logger(__name__)
 
 
 class BookManager:
     def __init__(self):
         pass
-    
+
     def build_query_url(self, query: str, filters: SearchFilters) -> str:
         """Construct search URL based on query and filters.
 
@@ -33,9 +35,7 @@ class BookManager:
 
         if filters.isbn:
             # ISBNs are included in query string
-            isbns = " || ".join(
-                [f"('isbn13:{isbn}' || 'isbn10:{isbn}')" for isbn in filters.isbn]
-            )
+            isbns = " || ".join([f"('isbn13:{isbn}' || 'isbn10:{isbn}')" for isbn in filters.isbn])
             query_html = quote(f"({isbns}) {query}")
 
         if filters.authors:
@@ -62,9 +62,7 @@ class BookManager:
         for filter_type, filter_values in vars(filters).items():
             if filter_type == "author" or filter_type == "title" and filter_values:
                 for value in filter_values:
-                    filters_query += (
-                        f"&termtype_{index}={filter_type}&termval_{index}={quote(value)}"
-                    )
+                    filters_query += f"&termtype_{index}={filter_type}&termval_{index}={quote(value)}"
                     index += 1
 
         return (
@@ -75,7 +73,6 @@ class BookManager:
             f"&q={query_html}"
             f"{filters_query}"
         )
-
 
     def search_books_by_url(self, url: str) -> List[BookInfo]:
         """Fetch books from a specific URL.
@@ -116,15 +113,12 @@ class BookManager:
 
         books.sort(
             key=lambda x: (
-                SUPPORTED_FORMATS.index(x.format)
-                if x.format in SUPPORTED_FORMATS
-                else len(SUPPORTED_FORMATS)
+                SUPPORTED_FORMATS.index(x.format) if x.format in SUPPORTED_FORMATS else len(SUPPORTED_FORMATS)
             )
         )
 
         return books
-    
-    
+
     def get_books_by_query(self, query: str, filters: SearchFilters) -> List[BookInfo]:
         """Search for books matching the query.
 
@@ -140,8 +134,7 @@ class BookManager:
         """
         url = self.build_query_url(query, filters)
         return self.search_books_by_url(url)
-        
-        
+
     def get_book_info(book_id: str) -> BookInfo:
         """Get detailed information for a specific book.
 
@@ -162,15 +155,12 @@ class BookManager:
         return _parse_book_info_page(soup, book_id)
 
 
-
-
-
-
-
 def _get_download_urls_from_welib(book_id: str) -> set[str]:
     """Get download urls from welib.org."""
     url = f"https://welib.org/md5/{book_id}"
-    logger.info(f"Getting download urls from welib.org for {book_id}. While this uses the bypasser, it will not start downloading them yet.")
+    logger.info(
+        f"Getting download urls from welib.org for {book_id}. While this uses the bypasser, it will not start downloading them yet."
+    )
     html = downloader.html_get_page(url, use_bypasser=True)
     if not html:
         return []
@@ -181,9 +171,8 @@ def _get_download_urls_from_welib(book_id: str) -> set[str]:
     download_links = [downloader.get_absolute_url(url, link) for link in download_links]
     return set(download_links)
 
-def _extract_book_metadata(
-    metadata_divs
-) -> Dict[str, List[str]]:
+
+def _extract_book_metadata(metadata_divs) -> Dict[str, List[str]]:
     """Extract metadata from book info divs."""
     info: Dict[str, List[str]] = {}
 
@@ -199,7 +188,7 @@ def _extract_book_metadata(
         if key not in info:
             info[key] = set()
         info[key].add(value)
-    
+
     # make set into list
     for key, value in info.items():
         info[key] = list(value)
@@ -216,12 +205,16 @@ def _extract_book_metadata(
     return {
         k.strip(): v
         for k, v in info.items()
-        if any(k.lower().startswith(prefix.lower()) for prefix in relevant_prefixes)
-        and "filename" not in k.lower()
+        if any(k.lower().startswith(prefix.lower()) for prefix in relevant_prefixes) and "filename" not in k.lower()
     }
 
 
-def download_book(book_info: BookInfo, book_path: Path, progress_callback: Optional[Callable[[float], None]] = None, cancel_flag: Optional[Event] = None) -> bool:
+def download_book(
+    book_info: BookInfo,
+    book_path: Path,
+    progress_callback: Optional[Callable[[float], None]] = None,
+    cancel_flag: Optional[Event] = None,
+) -> bool:
     """Download a book from available sources.
 
     Args:

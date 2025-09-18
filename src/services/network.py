@@ -10,7 +10,7 @@ import urllib.parse
 import ssl
 import ipaddress
 
-from src.logger import setup_logger
+from src.config.logging import setup_logger
 from config.settings import (
     PROXIES, AA_BASE_URL, CUSTOM_DNS, AA_AVAILABLE_URLS, DOH_SERVER,
     LOG_FILE, LOG_LEVEL, ENABLE_LOGGING

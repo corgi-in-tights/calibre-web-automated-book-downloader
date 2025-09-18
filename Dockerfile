@@ -59,24 +59,17 @@ RUN apt-get update && \
 # Set working directory
 WORKDIR /app
 
-# Install Python dependencies using pip
-# Upgrade pip first, then copy requirements and install
-# Copying requirements-base.txt separately leverages build cache
+# Installing requirements-base.txt separately leverages build cache (base does not change)
 COPY requirements-base.txt .
 RUN pip install --no-cache-dir -r requirements-base.txt && \
     # Clean root's pip cache
     rm -rf /root/.cache
 
-# Copy application code *after* dependencies are installed
 COPY . .
 
-# Final setup: permissions and directories in one layer
-# Only creating directories and setting executable bits.
-# Ownership will be handled by the entrypoint script.
-RUN mkdir -p /var/log/cwa-book-downloader /cwa-book-ingest && \
-    chmod +x /app/entrypoint.sh /app/tor.sh /app/genDebug.sh
+# Create log and ingest directories
+RUN mkdir -p /var/log/cwa-book-downloader /cwa-book-ingest
 
-# Expose the application port
 EXPOSE ${FLASK_PORT}
 
 # Add healthcheck for container status
@@ -84,8 +77,8 @@ EXPOSE ${FLASK_PORT}
 HEALTHCHECK --interval=60s --timeout=60s --start-period=60s --retries=3 \
     CMD curl -s http://localhost:${FLASK_PORT}/request/api/status > /dev/null || exit 1
 
-# Use dumb-init as the entrypoint to handle signals properly
-ENTRYPOINT ["/usr/bin/dumb-init", "--"]
+# Use dumb-init as the entrypoint to handle zombie workers THEN use entrypoint script
+ENTRYPOINT ["/usr/bin/dumb-init", "--", "/app/docker/entrypoint.sh"]
 
 
 FROM base AS cwa-bd
@@ -115,7 +108,7 @@ RUN chmod -R o+rx /usr/bin/chromium && \
     chmod -R o+w /usr/local/lib/python3.10/site-packages/seleniumbase/drivers/
 
 # Default command to run the application entrypoint script
-CMD ["/app/entrypoint.sh"]
+CMD ["/app/start.sh"]
 
 FROM cwa-bd AS cwa-bd-tor
 

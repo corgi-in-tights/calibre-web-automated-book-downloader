@@ -1,4 +1,4 @@
-from src.logger import setup_logger
+from src.config.logging import setup_logger
 from typing import Optional
 import requests
 

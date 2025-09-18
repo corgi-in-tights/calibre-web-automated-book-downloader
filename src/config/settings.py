@@ -5,13 +5,12 @@ This module consolidates all configuration settings from environment variables
 and provides computed settings for the application.
 """
 
-import os
 import json
+import logging
+import os
 from pathlib import Path
 
-from src.logger import setup_logger
-
-
+logger = logging.getLogger(__name__)
 
 # ==============================================================================
 # UTILITY FUNCTIONS
@@ -19,8 +18,22 @@ from src.logger import setup_logger
 
 def _string_to_bool(s: str) -> bool:
     """Convert string to boolean value."""
-    return s.lower() in ["true", "yes", "1", "y"]
+    return s.lower().strip() in ["true", "yes", "1", "y"]
 
+def get_env(key: str, default: str = "") -> str:
+    """Get environment variable or return default."""
+    return os.getenv(key, default).strip()
+
+def get_env_required(key: str, additional_error_msg: str | None = None) -> str:
+    """Get environment variable or raise error if not found."""
+    value = os.getenv(key).strip()
+    if not value:
+        msg = f"Missing required environment variable: {key}"
+        if additional_error_msg is not None:
+            msg += f" \n{additional_error_msg}"
+        logger.error(msg)
+        raise ValueError(msg)
+    return value
 
 # ==============================================================================
 # APP SETTINGS
@@ -28,60 +41,70 @@ def _string_to_bool(s: str) -> bool:
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-BUILD_VERSION = os.getenv("BUILD_VERSION", "N/A")
+SECRET_KEY = os.urandom(64) if "CWA_BD_SECRET_KEY" in os.environ else get_env_required("CWA_BD_SECRET_KEY")
 
-RELEASE_VERSION = os.getenv("RELEASE_VERSION", "N/A")
+BUILD_VERSION = get_env("BUILD_VERSION", "N/A")
 
-APP_ENV = os.getenv("APP_ENV", "N/A").lower()
+RELEASE_VERSION = get_env("RELEASE_VERSION", "N/A")
 
-DEBUG = _string_to_bool(os.getenv("DEBUG", "false"))
+APP_ENV = get_env("APP_ENV", "N/A").lower()
 
-DOCKERMODE = _string_to_bool(os.getenv("DOCKERMODE", "false"))
+DEBUG = _string_to_bool(get_env("DEBUG", "false"))
 
-FLASK_HOST = os.getenv("FLASK_HOST", "0.0.0.0")
+FLASK_HOST = get_env("FLASK_HOST", "127.0.0.1")
 
-FLASK_PORT = int(os.getenv("FLASK_PORT", "8084"))
+FLASK_PORT = int(get_env("FLASK_PORT", "8084"))
 
 
 # ==============================================================================
 # LOGGING CONFIGURATION
 # ==============================================================================
 
-ENABLE_LOGGING = _string_to_bool(os.getenv("ENABLE_LOGGING", "true"))
+ENABLE_FILE_LOGGING = _string_to_bool(get_env("ENABLE_FILE_LOGGING", "true"))
 
-LOG_ROOT = Path(os.getenv("LOG_ROOT", "/var/log/"))
+if ENABLE_FILE_LOGGING:
+    LOG_DIR = Path(get_env("LOG_ROOT", "/var/log/cwa-book-downloader"))
+    LOG_FILE = LOG_DIR / "cwa-book-downloader.log"
 
-LOG_DIR = LOG_ROOT / "cwa-book-downloader"
+LOG_LEVEL = "DEBUG" if DEBUG else get_env("LOG_LEVEL", "INFO").upper()
 
-# Set log level based on debug mode
-LOG_LEVEL = "DEBUG" if DEBUG else os.getenv("LOG_LEVEL", "INFO").upper()
 
-LOG_FILE = LOG_DIR / "cwa-book-downloader.log"
+# ===============================================================================
+# DEBUG CONFIGURATION
+# ===============================================================================
+
+DEBUG_LOG_KEYS = []  # Whitelist keys manually, TBD
+
 
 # ==============================================================================
 # DIRECTORY SETTINGS
 # ==============================================================================
 
-TMP_DIR = Path(os.getenv("TMP_DIR", "/tmp/cwa-book-downloader"))
+TMP_DIR = Path(get_env("TMP_DIR", "/tmp/cwa-book-downloader")) # noqa: S108
 
-INGEST_DIR = Path(os.getenv("INGEST_DIR", "/cwa-book-ingest"))
+INGEST_DIR = Path(get_env("INGEST_DIR", "/cwa-book-ingest"))
 
 # Create necessary directories
-if ENABLE_LOGGING:
+if ENABLE_FILE_LOGGING:
     LOG_DIR.mkdir(exist_ok=True)
 TMP_DIR.mkdir(exist_ok=True)
 INGEST_DIR.mkdir(exist_ok=True)
 
-# Check if directories are on different file systems
-CROSS_FILE_SYSTEM = os.stat(TMP_DIR).st_dev != os.stat(INGEST_DIR).st_dev
+
+def is_cross_fs(path1: Path, path2: Path) -> bool:
+    return path1.stat().st_dev != path2.stat().st_dev
+
+CROSS_FILE_SYSTEM = is_cross_fs(TMP_DIR, INGEST_DIR)
 
 
 # ==============================================================================
 # AUTHENTICATION SETTINGS
 # ==============================================================================
 
-# Use CWA's authentication database
-_CWA_DB = os.getenv("CWA_DB_PATH")
+BASIC_AUTH_ENABLED = _string_to_bool(get_env("BASIC_AUTH_ENABLED", "true"))
+
+_CWA_DB = os.get_env_required("CWA_DB_PATH")
+
 CWA_DB_PATH = Path(_CWA_DB) if _CWA_DB else None
 
 
@@ -89,57 +112,59 @@ CWA_DB_PATH = Path(_CWA_DB) if _CWA_DB else None
 # BOOK PROCESSING SETTINGS
 # ==============================================================================
 
-# Load supported book languages
-with open(BASE_DIR / "data" / "book-languages.json") as file:
+# Load supported languages from JSON
+with (BASE_DIR / "data" / "book-languages.json").open() as file:
     _SUPPORTED_BOOK_LANGUAGES = json.load(file)
 
+SUPPORTED_LANGUAGE_CODES = {entry["code"].lower() for entry in _SUPPORTED_BOOK_LANGUAGES}
+
 # Supported file formats
-SUPPORTED_FORMATS = os.getenv("SUPPORTED_FORMATS", "epub,mobi,azw3,fb2,djvu,cbz,cbr").lower().split(",")
+SUPPORTED_FILE_FORMATS = get_env(
+    "SUPPORTED_FILE_FORMATS", "epub,mobi,azw3,fb2,djvu,cbz,cbr",
+).lower().split(",")
 
 # Book language settings
-_BOOK_LANGUAGE = os.getenv("BOOK_LANGUAGE", "en").lower()
-BOOK_LANGUAGE = [lang.strip() for lang in _BOOK_LANGUAGE.split(',')]
-BOOK_LANGUAGE = [lang for lang in BOOK_LANGUAGE if lang in [l['code'] for l in _SUPPORTED_BOOK_LANGUAGES]]
-if not BOOK_LANGUAGE:
-    BOOK_LANGUAGE = ['en']
+raw_book_languages = get_env("BOOK_LANGUAGE", "en").lower().split(",")
 
-# Book processing preferences
-USE_BOOK_TITLE = _string_to_bool(os.getenv("USE_BOOK_TITLE", "false"))
-PRIORITIZE_WELIB = _string_to_bool(os.getenv("PRIORITIZE_WELIB", "false"))
+BOOK_LANGUAGES = [lang.strip() for lang in raw_book_languages if lang.strip() in SUPPORTED_LANGUAGE_CODES]
+
+DEFAULT_BOOK_LANGUAGE = BOOK_LANGUAGES[0] if BOOK_LANGUAGES else "en"
+
+# Whether to use book title as filename when saving
+USE_BOOK_TITLE = _string_to_bool(get_env("USE_BOOK_TITLE", "false"))
+
+PRIORITIZE_WELIB = _string_to_bool(get_env("PRIORITIZE_WELIB", "false"))
+
 
 # ==============================================================================
 # DOWNLOAD SETTINGS
 # ==============================================================================
 
-MAX_RETRY = int(os.getenv("MAX_RETRY", "10"))
+MAX_RETRY = int(get_env("MAX_RETRY", "10"))
 
-DEFAULT_SLEEP = int(os.getenv("DEFAULT_SLEEP", "5"))
+DEFAULT_SLEEP = int(get_env("DEFAULT_SLEEP", "5"))
 
-MAIN_LOOP_SLEEP_TIME = int(os.getenv("MAIN_LOOP_SLEEP_TIME", "5"))
+MAIN_LOOP_SLEEP_TIME = int(get_env("MAIN_LOOP_SLEEP_TIME", "5"))
 
-MAX_CONCURRENT_DOWNLOADS = int(os.getenv("MAX_CONCURRENT_DOWNLOADS", "3"))
+MAX_CONCURRENT_DOWNLOADS = int(get_env("MAX_CONCURRENT_DOWNLOADS", "3"))
 
-DOWNLOAD_PROGRESS_UPDATE_INTERVAL = int(os.getenv("DOWNLOAD_PROGRESS_UPDATE_INTERVAL", "5"))
+DOWNLOAD_PROGRESS_UPDATE_INTERVAL = int(get_env("DOWNLOAD_PROGRESS_UPDATE_INTERVAL", "5"))
 
-STATUS_TIMEOUT = int(os.getenv("STATUS_TIMEOUT", "3600"))
+STATUS_TIMEOUT = int(get_env("STATUS_TIMEOUT", "3600"))
 
 
 # ==============================================================================
 # ANNA'S ARCHIVE SETTINGS
 # ==============================================================================
 
-AA_DONATOR_KEY = os.getenv("AA_DONATOR_KEY", "").strip()
+AA_DONATOR_KEY = get_env("AA_DONATOR_KEY", "")
 
-AA_BASE_URL = os.getenv("AA_BASE_URL", "auto").strip()
+AA_BASE_URL = get_env("AA_BASE_URL", "auto")
 
-AA_ADDITIONAL_URLS = os.getenv("AA_ADDITIONAL_URLS", "").strip()
+AA_ADDITIONAL_URLS = get_env("AA_ADDITIONAL_URLS", "")
 
 # Available Anna's Archive URLs
-AA_AVAILABLE_URLS = [
-    "https://annas-archive.org",
-    "https://annas-archive.se", 
-    "https://annas-archive.li"
-]
+AA_AVAILABLE_URLS = ["https://annas-archive.org", "https://annas-archive.se", "https://annas-archive.li"]
 if AA_ADDITIONAL_URLS:
     AA_AVAILABLE_URLS.extend([url.strip() for url in AA_ADDITIONAL_URLS.split(",") if url.strip()])
 
@@ -148,17 +173,19 @@ if AA_ADDITIONAL_URLS:
 # CLOUDFLARE BYPASS SETTINGS
 # ==============================================================================
 
-USE_CF_BYPASS = _string_to_bool(os.getenv("USE_CF_BYPASS", "true"))
+USE_CF_BYPASS = _string_to_bool(get_env("USE_CF_BYPASS", "true"))
 
-BYPASS_RELEASE_INACTIVE_MIN = int(os.getenv("BYPASS_RELEASE_INACTIVE_MIN", "5"))
+BYPASS_RELEASE_INACTIVE_MIN = int(get_env("BYPASS_RELEASE_INACTIVE_MIN", "5"))
 
 # External bypasser settings
-USING_EXTERNAL_BYPASSER = _string_to_bool(os.getenv("USING_EXTERNAL_BYPASSER", "false"))
+USING_EXTERNAL_BYPASSER = _string_to_bool(get_env("USING_EXTERNAL_BYPASSER", "false"))
 
 if USING_EXTERNAL_BYPASSER:
-    EXT_BYPASSER_URL = os.getenv("EXT_BYPASSER_URL", "http://flaresolverr:8191").strip()
-    EXT_BYPASSER_PATH = os.getenv("EXT_BYPASSER_PATH", "/v1").strip()
-    EXT_BYPASSER_TIMEOUT = int(os.getenv("EXT_BYPASSER_TIMEOUT", "60000"))
+    EXT_BYPASSER_URL = get_env_required(
+        "EXT_BYPASSER_URL",
+        additional_error_msg="If using an external bypasser, set EXT_BYPASSER_URL to the full URL, e.g. http://bypasser:5000",
+    )
+    EXT_BYPASSER_TIMEOUT = int(get_env("EXT_BYPASSER_TIMEOUT", "60000"))
 
 # Virtual display settings for internal cloudflare bypasser
 if not USING_EXTERNAL_BYPASSER:
@@ -172,8 +199,8 @@ if not USING_EXTERNAL_BYPASSER:
 # ==============================================================================
 
 # Proxy settings
-HTTP_PROXY = os.getenv("HTTP_PROXY", "").strip()
-HTTPS_PROXY = os.getenv("HTTPS_PROXY", "").strip()
+HTTP_PROXY = get_env("HTTP_PROXY", "")
+HTTPS_PROXY = get_env("HTTPS_PROXY", "")
 PROXIES = {}
 if HTTP_PROXY:
     PROXIES["http"] = HTTP_PROXY
@@ -181,11 +208,11 @@ if HTTPS_PROXY:
     PROXIES["https"] = HTTPS_PROXY
 
 # Tor settings
-USING_TOR = _string_to_bool(os.getenv("USING_TOR", "false"))
+USING_TOR = _string_to_bool(get_env("USING_TOR", "false"))
 
 # DNS settings
-_CUSTOM_DNS = os.getenv("CUSTOM_DNS", "").strip()
-USE_DOH = _string_to_bool(os.getenv("USE_DOH", "false"))
+_CUSTOM_DNS = get_env("CUSTOM_DNS", "")
+USE_DOH = _string_to_bool(get_env("USE_DOH", "false"))
 
 # If using Tor, disable custom DNS, DOH, and proxy
 if USING_TOR:
@@ -201,41 +228,44 @@ DOH_SERVER = ""
 
 if _CUSTOM_DNS:
     _custom_dns = _CUSTOM_DNS.lower().strip()
-    
+
     if _custom_dns == "google":
         CUSTOM_DNS = [
-            "8.8.8.8", "8.8.4.4", 
-            "2001:4860:4860:0000:0000:0000:0000:8888", 
-            "2001:4860:4860:0000:0000:0000:0000:8844"
+            "8.8.8.8",
+            "8.8.4.4",
+            "2001:4860:4860:0000:0000:0000:0000:8888",
+            "2001:4860:4860:0000:0000:0000:0000:8844",
         ]
         DOH_SERVER = "https://dns.google/dns-query"
     elif _custom_dns == "quad9":
         CUSTOM_DNS = [
-            "9.9.9.9", "149.112.112.112",
+            "9.9.9.9",
+            "149.112.112.112",
             "2620:00fe:0000:0000:0000:0000:0000:00fe",
-            "2620:00fe:0000:0000:0000:0000:0000:0009"
+            "2620:00fe:0000:0000:0000:0000:0000:0009",
         ]
         DOH_SERVER = "https://dns.quad9.net/dns-query"
     elif _custom_dns == "cloudflare":
         CUSTOM_DNS = [
-            "1.1.1.1", "1.0.0.1",
+            "1.1.1.1",
+            "1.0.0.1",
             "2606:4700:4700:0000:0000:0000:0000:1111",
-            "2606:4700:4700:0000:0000:0000:0000:1001"
+            "2606:4700:4700:0000:0000:0000:0000:1001",
         ]
         DOH_SERVER = "https://cloudflare-dns.com/dns-query"
     elif _custom_dns == "opendns":
         CUSTOM_DNS = [
-            "208.67.222.222", "208.67.220.220",
+            "208.67.222.222",
+            "208.67.220.220",
             "2620:0119:0035:0000:0000:0000:0000:0035",
-            "2620:0119:0053:0000:0000:0000:0000:0053"
+            "2620:0119:0053:0000:0000:0000:0000:0053",
         ]
         DOH_SERVER = "https://doh.opendns.com/dns-query"
     else:
         # Custom DNS IPs
         _custom_dns_ips = _custom_dns.split(",")
         CUSTOM_DNS = [
-            dns.strip() for dns in _custom_dns_ips 
-            if dns.replace(":", "").replace(".", "").strip().isdigit()
+            dns.strip() for dns in _custom_dns_ips if dns.replace(":", "").replace(".", "").strip().isdigit()
         ]
 
 # Apply DOH settings
@@ -246,39 +276,12 @@ if not USE_DOH:
 # CUSTOM SCRIPT SETTINGS
 # ==============================================================================
 
-CUSTOM_SCRIPT = os.getenv("CUSTOM_SCRIPT", "").strip()
-
+CUSTOM_SCRIPT = get_env("CUSTOM_SCRIPT", "")
 # Validate custom script
 if CUSTOM_SCRIPT:
-    if not os.path.exists(CUSTOM_SCRIPT):
-        logger.warning(f"CUSTOM_SCRIPT {CUSTOM_SCRIPT} does not exist")
+    if not Path(CUSTOM_SCRIPT).exists():
+        logger.warning("CUSTOM_SCRIPT %s does not exist", CUSTOM_SCRIPT)
         CUSTOM_SCRIPT = ""
     elif not os.access(CUSTOM_SCRIPT, os.X_OK):
-        logger.warning(f"CUSTOM_SCRIPT {CUSTOM_SCRIPT} is not executable")
+        logger.warning("CUSTOM_SCRIPT %s is not executable", CUSTOM_SCRIPT)
         CUSTOM_SCRIPT = ""
-
-
-# ==============================================================================
-# LOGGING CONFIGURATION OUTPUT
-# ==============================================================================
-
-# Log all configuration values for debugging
-for key, value in globals().items():
-    if (not key.startswith('_') and 
-        key.isupper() and 
-        not callable(value) and
-        key not in ['BASE_DIR', 'Path', 'os', 'json']):
-        
-        # Redact sensitive information
-        if key == "AA_DONATOR_KEY" and value and value.strip():
-            log_value = "REDACTED"
-        else:
-            log_value = value
-        
-        logger.info(f"{key}: {log_value}")
-
-# Log computed values
-logger.info(f"BASE_DIR: {BASE_DIR}")
-logger.info(f"CROSS_FILE_SYSTEM: {CROSS_FILE_SYSTEM}")
-logger.info(f"STAT TMP_DIR: {os.stat(TMP_DIR)}")
-logger.info(f"STAT INGEST_DIR: {os.stat(INGEST_DIR)}")
