@@ -126,7 +126,7 @@ class BookQueue:
                                 "priority": item.priority,
                                 "added_time": item.added_time,
                                 "status": self._status.get(item.book_id, QueueStatus.QUEUED),
-                            }
+                            },
                         )
                 except queue.Empty:
                     break
@@ -155,7 +155,7 @@ class BookQueue:
                     self._cancel_flags[book_id].set()
                 self._update_status(book_id, QueueStatus.CANCELLED)
                 return True
-            elif current_status == QueueStatus.QUEUED:
+            if current_status == QueueStatus.QUEUED:
                 # Remove from queue and mark as cancelled
                 self._update_status(book_id, QueueStatus.CANCELLED)
                 return True

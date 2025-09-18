@@ -12,7 +12,6 @@ from typing import Any
 from conf import settings
 from models import BookInfo, QueueStatus, SearchFilters, book_queue
 from services.archive_managers import book_manager
-from utils.book_utils import sanitize_filename
 from utils.logger_utils import get_logger
 
 from .archive_managers import ArchiveManager
@@ -114,7 +113,7 @@ def down(book_id: str, cancel_flag: Event) -> Optional[str]:
 
         if CUSTOM_SCRIPT:
             logger.info(f"Running custom script: {CUSTOM_SCRIPT}")
-            subprocess.run([CUSTOM_SCRIPT, book_path])
+            subprocess.run([CUSTOM_SCRIPT, book_path], check=False)
 
         intermediate_path = INGEST_DIR / f"{book_id}.crdownload"
         final_path = INGEST_DIR / book_name
