@@ -4,7 +4,8 @@ from typing import Any
 from cachetools import TTLCache
 
 from conf import settings
-from models import SearchFilters
+from models import BookInfo, QueueStatus, SearchFilters, book_queue
+from services.archive_managers import book_manager
 from utils.logger_utils import get_logger
 from utils.threading_utils import cached_lookup
 
@@ -57,7 +58,6 @@ def get_book_details(book_id: str, archive: str | ArchiveManager | None = None) 
     manager = get_archive_manager_by_any(archive)
     if manager is None:
         logger.error("No valid archive manager found for value: %s", archive)
-        return None
 
     key = (book_id, manager.identifier)
     return cached_lookup(

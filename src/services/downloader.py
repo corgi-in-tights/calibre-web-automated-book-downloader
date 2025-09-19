@@ -1,15 +1,15 @@
 """Network operations manager for the book downloader application."""
 
-import src.services.network as network
 import time
+from collections.abc import Callable
 from io import BytesIO
 from threading import Event
-from typing import Callable, Optional
 from urllib.parse import urlparse
 
 import requests
 from tqdm import tqdm
 
+from src.services import network
 from utils.logger_utils import get_logger
 
 network.init()
@@ -115,12 +115,11 @@ def html_get_page(url: str, retry: int = MAX_RETRY, use_bypasser: bool = False) 
         if use_bypasser and USE_CF_BYPASS:
             logger.info(f"GET Using Cloudflare Bypasser for: {url}")
             return get_bypassed_page(url)
-        else:
-            logger.info(f"GET: {url}")
-            response = requests.get(url, proxies=PROXIES)
-            response.raise_for_status()
-            logger.debug(f"Success getting: {url}")
-            time.sleep(1)
+        logger.info(f"GET: {url}")
+        response = requests.get(url, proxies=PROXIES)
+        response.raise_for_status()
+        logger.debug(f"Success getting: {url}")
+        time.sleep(1)
         return str(response.text)
 
     except Exception as e:
@@ -148,9 +147,9 @@ def html_get_page(url: str, retry: int = MAX_RETRY, use_bypasser: bool = False) 
 def download_url(
     link: str,
     size: str = "",
-    progress_callback: Optional[Callable[[float], None]] = None,
-    cancel_flag: Optional[Event] = None,
-) -> Optional[BytesIO]:
+    progress_callback: Callable[[float], None] | None = None,
+    cancel_flag: Event | None = None,
+) -> BytesIO | None:
     """Download content from URL into a BytesIO buffer.
 
     Args:
@@ -188,7 +187,7 @@ def download_url(
         if buffer.tell() * 0.1 < total_size * 0.9:
             # Check the content of the buffer if its HTML or binary
             if response.headers.get("content-type", "").startswith("text/html"):
-                logger.warn(f"Failed to download content for {link}. Found HTML content instead.")
+                logger.warning(f"Failed to download content for {link}. Found HTML content instead.")
                 return None
         return buffer
     except requests.exceptions.RequestException as e:
