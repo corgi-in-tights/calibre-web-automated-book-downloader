@@ -6,19 +6,13 @@ import subprocess
 import threading
 import time
 from datetime import datetime
-from typing import Optional
 from urllib.parse import urlparse
 
 import requests
-from selenium.common.exceptions import TimeoutException
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import WebDriverWait
 
 # --- SeleniumBase Import ---
 from seleniumbase import Driver
 
-import src.services.network as network
 from config.settings import (
     BYPASS_RELEASE_INACTIVE_MIN,
     CUSTOM_DNS,
@@ -37,6 +31,7 @@ from config.settings import (
     VIRTUAL_SCREEN_SIZE,
 )
 from src.config.logging import setup_logger
+from src.services import network
 
 logger = setup_logger(__name__, LOG_FILE, LOG_LEVEL, ENABLE_LOGGING)
 network.init()
@@ -273,7 +268,7 @@ def _get_chromium_args():
                 "--enable-logging",  # Enable Chrome browser logging
                 "--v=1",  # Set verbosity level for Chrome logs
                 "--log-file=" + str(LOG_DIR / "chrome_browser.log"),
-            ]
+            ],
         )
 
     # Add proxy settings if configured
@@ -295,19 +290,19 @@ def _get_chromium_args():
                         "--enable-features=DnsOverHttps",
                         "--dns-over-https-mode=secure",
                         f'--dns-over-https-servers="{DOH_SERVER}"',
-                    ]
+                    ],
                 )
                 doh_hostname = urlparse(DOH_SERVER).hostname
                 if doh_hostname:
                     try:
                         arguments.append(
-                            f"--host-resolver-rules=MAP {doh_hostname} {socket.gethostbyname(doh_hostname)}"
+                            f"--host-resolver-rules=MAP {doh_hostname} {socket.gethostbyname(doh_hostname)}",
                         )
                     except socket.gaierror:
                         logger.warning(f"Could not resolve DoH hostname: {doh_hostname}")
             elif CUSTOM_DNS:
                 arguments.append(f'--dns-server="{",".join(CUSTOM_DNS)}"')
-                arguments.append(f"--disable-features=DnsOverHttps")
+                arguments.append("--disable-features=DnsOverHttps")
     except Exception as e:
         logger.error_trace(f"Error configuring DNS settings: {e}")
     return arguments
@@ -341,22 +336,21 @@ def _get(url, retry: int = MAX_RETRY):
         if _is_bypassed(sb):
             logger.info("Bypass successful.")
             return sb.page_source
-        else:
-            logger.warning("Bypass completed but page still shows Cloudflare protection")
-            # Log page content for debugging (truncated)
-            try:
-                page_text = (
-                    sb.get_text("body")[:500] + "..." if len(sb.get_text("body")) > 500 else sb.get_text("body")
-                )
-                logger.debug(f"Page content: {page_text}")
-            except:
-                pass
+        logger.warning("Bypass completed but page still shows Cloudflare protection")
+        # Log page content for debugging (truncated)
+        try:
+            page_text = (
+                sb.get_text("body")[:500] + "..." if len(sb.get_text("body")) > 500 else sb.get_text("body")
+            )
+            logger.debug(f"Page content: {page_text}")
+        except:
+            pass
 
     except Exception as e:
         # Enhanced error logging with full stack trace
         import traceback
 
-        error_details = f"Exception type: {type(e).__name__}, Message: {str(e)}"
+        error_details = f"Exception type: {type(e).__name__}, Message: {e!s}"
         stack_trace = traceback.format_exc()
 
         if retry == 0:
@@ -390,7 +384,7 @@ def _init_driver():
     if DRIVER:
         _reset_driver()
     driver = Driver(
-        uc=True, headless=False, size=f"{VIRTUAL_SCREEN_SIZE[0]},{VIRTUAL_SCREEN_SIZE[1]}", chromium_arg=CHROMIUM_ARGS
+        uc=True, headless=False, size=f"{VIRTUAL_SCREEN_SIZE[0]},{VIRTUAL_SCREEN_SIZE[1]}", chromium_arg=CHROMIUM_ARGS,
     )
     DRIVER = driver
     time.sleep(DEFAULT_SLEEP)
@@ -538,7 +532,7 @@ def wait_for_result(func, timeout: int = 10, condition: any = True):
 _init_cleanup_thread()
 
 
-def get_bypassed_page(url: str) -> Optional[str]:
+def get_bypassed_page(url: str) -> str | None:
     """Fetch HTML content from a URL using the internal Cloudflare Bypasser.
 
     Args:
@@ -551,5 +545,4 @@ def get_bypassed_page(url: str) -> Optional[str]:
     logger.debug(f"Cloudflare Bypasser response length: {len(response_html)}")
     if response_html.strip() != "":
         return response_html
-    else:
-        raise requests.exceptions.RequestException("Failed to bypass Cloudflare")
+    raise requests.exceptions.RequestException("Failed to bypass Cloudflare")

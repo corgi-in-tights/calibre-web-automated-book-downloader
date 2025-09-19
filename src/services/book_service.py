@@ -4,8 +4,7 @@ from typing import Any
 from cachetools import TTLCache
 
 from conf import settings
-from models import BookInfo, QueueStatus, SearchFilters, book_queue
-from services.archive_managers import book_manager
+from models import SearchFilters
 from utils.logger_utils import get_logger
 from utils.threading_utils import cached_lookup
 

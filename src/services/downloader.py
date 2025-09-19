@@ -43,7 +43,7 @@ def _process_single_download(book_id: str, cancel_flag: Event) -> None:
 
         book_queue.update_status(book_id, new_status)
 
-        logger.info("Book %s download %s", book_id, 'successful' if download_path else 'failed')
+        logger.info("Book %s download %s", book_id, "successful" if download_path else "failed")
 
     except Exception as e:
         if not cancel_flag.is_set():

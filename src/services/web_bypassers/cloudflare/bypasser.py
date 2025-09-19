@@ -1,4 +1,3 @@
-from typing import Optional
 
 import requests
 
@@ -15,7 +14,7 @@ class CloudflareBypasser(CloudflareBypasser):
     def __init__(self, driver: str = "chrome", headless: bool = True, wait_time: int = 10):
         pass
 
-    def get_bypassed_page(self, url: str) -> Optional[str]:
+    def get_bypassed_page(self, url: str) -> str | None:
         response_html = internal_engine.get(url, retry=MAX_RETRY)
         logger.debug(f"Internal Bypasser response length: {len(response_html)}")
 
