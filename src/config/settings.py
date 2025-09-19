@@ -20,9 +20,11 @@ def _string_to_bool(s: str) -> bool:
     """Convert string to boolean value."""
     return s.lower().strip() in ["true", "yes", "1", "y"]
 
+
 def get_env(key: str, default: str = "") -> str:
     """Get environment variable or return default."""
     return os.getenv(key, default).strip()
+
 
 def get_env_required(key: str, additional_error_msg: str | None = None) -> str:
     """Get environment variable or raise error if not found."""
@@ -34,6 +36,7 @@ def get_env_required(key: str, additional_error_msg: str | None = None) -> str:
         logger.error(msg)
         raise ValueError(msg)
     return value
+
 
 # ==============================================================================
 # APP SETTINGS
@@ -55,18 +58,27 @@ FLASK_HOST = get_env("FLASK_HOST", "127.0.0.1")
 
 FLASK_PORT = int(get_env("FLASK_PORT", "8084"))
 
+ENABLED_FLASK_BLUEPRINTS = {"api"}
+
+if _string_to_bool(get_env("FLASK_ENABLE_FRONTEND", "true")):
+    ENABLED_FLASK_BLUEPRINTS.add("frontend")
+
+if DEBUG:
+    ENABLED_FLASK_BLUEPRINTS.add("debug")
 
 # ==============================================================================
 # LOGGING CONFIGURATION
 # ==============================================================================
 
+LOG_LEVEL = "DEBUG" if DEBUG else get_env("LOG_LEVEL", "INFO").upper()
+
 ENABLE_FILE_LOGGING = _string_to_bool(get_env("ENABLE_FILE_LOGGING", "true"))
 
 if ENABLE_FILE_LOGGING:
     LOG_DIR = Path(get_env("LOG_ROOT", "/var/log/cwa-book-downloader"))
-    LOG_FILE = LOG_DIR / "cwa-book-downloader.log"
+    LOG_DIR.mkdir(exist_ok=True)
 
-LOG_LEVEL = "DEBUG" if DEBUG else get_env("LOG_LEVEL", "INFO").upper()
+    LOG_FILE = LOG_DIR / "cwa-book-downloader.log"
 
 
 # ===============================================================================
@@ -80,16 +92,13 @@ DEBUG_LOG_KEYS = []  # Whitelist keys manually, TBD
 # DIRECTORY SETTINGS
 # ==============================================================================
 
-TMP_DIR = Path(get_env("TMP_DIR", "/tmp/cwa-book-downloader")) # noqa: S108
+TMP_DIR = Path(get_env("TMP_DIR", "/tmp/cwa-book-downloader"))  # noqa: S108
 
 INGEST_DIR = Path(get_env("INGEST_DIR", "/cwa-book-ingest"))
 
-# Create necessary directories
-if ENABLE_FILE_LOGGING:
-    LOG_DIR.mkdir(exist_ok=True)
 TMP_DIR.mkdir(exist_ok=True)
-INGEST_DIR.mkdir(exist_ok=True)
 
+INGEST_DIR.mkdir(exist_ok=True)
 
 def is_cross_fs(path1: Path, path2: Path) -> bool:
     return path1.stat().st_dev != path2.stat().st_dev
@@ -119,9 +128,14 @@ with (BASE_DIR / "data" / "book-languages.json").open() as file:
 SUPPORTED_LANGUAGE_CODES = {entry["code"].lower() for entry in _SUPPORTED_BOOK_LANGUAGES}
 
 # Supported file formats
-SUPPORTED_FILE_FORMATS = get_env(
-    "SUPPORTED_FILE_FORMATS", "epub,mobi,azw3,fb2,djvu,cbz,cbr",
-).lower().split(",")
+SUPPORTED_FILE_FORMATS = (
+    get_env(
+        "SUPPORTED_FILE_FORMATS",
+        "epub,mobi,azw3,fb2,djvu,cbz,cbr",
+    )
+    .lower()
+    .split(",")
+)
 
 # Book language settings
 raw_book_languages = get_env("BOOK_LANGUAGE", "en").lower().split(",")
@@ -132,8 +146,6 @@ DEFAULT_BOOK_LANGUAGE = BOOK_LANGUAGES[0] if BOOK_LANGUAGES else "en"
 
 # Whether to use book title as filename when saving
 USE_BOOK_TITLE = _string_to_bool(get_env("USE_BOOK_TITLE", "false"))
-
-PRIORITIZE_WELIB = _string_to_bool(get_env("PRIORITIZE_WELIB", "false"))
 
 
 # ==============================================================================
@@ -154,45 +166,123 @@ STATUS_TIMEOUT = int(get_env("STATUS_TIMEOUT", "3600"))
 
 
 # ==============================================================================
-# ANNA'S ARCHIVE SETTINGS
+# ARCHIVE MANAGER SETTINGS
 # ==============================================================================
 
-AA_DONATOR_KEY = get_env("AA_DONATOR_KEY", "")
+ARCHIVE_MANAGERS = {
+    "annas_archive": {
+        "name": "Anna's Archive",
+        "path": "archive_managers.annas_archive.AnnasArchiveManager",
+        "preferred_bypasser": get_env("AA_BYPASSER", "default"),
+        "kwargs": lambda: {  # lazy evaluation of kwargs
+            "base_url": get_env("AA_BASE_URL", "auto"),
+            "donator_key": get_env("AA_DONATOR_KEY", ""),
+            "urls": [
+                "https://annas-archive.org",
+                "https://annas-archive.se",
+                "https://annas-archive.li",
+            ]
+            + [
+                url.strip()
+                for url in get_env("AA_ADDITIONAL_URLS", "").split(",")
+                if url.strip()
+            ],
+        },
+    },
+    "welib": {
+        "name": "WeLib",
+        "path": "archive_managers.welib.WeLibManager",
+        "preferred_bypasser": get_env("WELIB_BYPASSER", "default"),
+        "kwargs": lambda: {
+            "base_url": get_env("WELIB_BASE_URL", "auto"),
+            "donator_key": get_env("WELIB_DONATOR_KEY", ""),
+            "urls": [
+                "https://welib.org",
+                "https://welib.se",
+                "https://welib.li",
+            ]
+            + [
+                url.strip()
+                for url in get_env("WELIB_ADDITIONAL_URLS", "").split(",")
+                if url.strip()
+            ],
+        },
+    },
+    # libgen, z-library, irc stuff, that one very dark alley ebook library: {
+    #     only examples :( are you ready to PR?
+    # },
+}
 
-AA_BASE_URL = get_env("AA_BASE_URL", "auto")
-
-AA_ADDITIONAL_URLS = get_env("AA_ADDITIONAL_URLS", "")
-
-# Available Anna's Archive URLs
-AA_AVAILABLE_URLS = ["https://annas-archive.org", "https://annas-archive.se", "https://annas-archive.li"]
-if AA_ADDITIONAL_URLS:
-    AA_AVAILABLE_URLS.extend([url.strip() for url in AA_ADDITIONAL_URLS.split(",") if url.strip()])
-
-
-# ==============================================================================
-# CLOUDFLARE BYPASS SETTINGS
-# ==============================================================================
-
-USE_CF_BYPASS = _string_to_bool(get_env("USE_CF_BYPASS", "true"))
-
-BYPASS_RELEASE_INACTIVE_MIN = int(get_env("BYPASS_RELEASE_INACTIVE_MIN", "5"))
-
-# External bypasser settings
-USING_EXTERNAL_BYPASSER = _string_to_bool(get_env("USING_EXTERNAL_BYPASSER", "false"))
-
-if USING_EXTERNAL_BYPASSER:
-    EXT_BYPASSER_URL = get_env_required(
-        "EXT_BYPASSER_URL",
-        additional_error_msg="If using an external bypasser, set EXT_BYPASSER_URL to the full URL, e.g. http://bypasser:5000",
+DEFAULT_ARCHIVE_MANAGER = get_env("DEFAULT_ARCHIVE_MANAGER", "annas_archive")
+if DEFAULT_ARCHIVE_MANAGER not in ARCHIVE_MANAGERS:
+    msg = (
+        "Invalid DEFAULT_ARCHIVE_MANAGER configuration: "
+        f"{DEFAULT_ARCHIVE_MANAGER}, key must be of {', '.join([f'`{k}' for k in ARCHIVE_MANAGERS])}"
     )
-    EXT_BYPASSER_TIMEOUT = int(get_env("EXT_BYPASSER_TIMEOUT", "60000"))
+    logger.error(msg)
+    raise ValueError(msg)
 
-# Virtual display settings for internal cloudflare bypasser
-if not USING_EXTERNAL_BYPASSER:
-    VIRTUAL_SCREEN_SIZE = (1024, 768)
-    RECORDING_DIR = LOG_DIR / "recording"
-    if DEBUG:
-        RECORDING_DIR.mkdir(parents=True, exist_ok=True)
+
+# ==============================================================================
+# WEB BYPASSER SETTINGS
+# ==============================================================================
+
+def _create_recording_dir() -> Path:
+    dir_path = LOG_DIR / "recording"
+    dir_path.mkdir(parents=True, exist_ok=True)
+    return dir_path
+
+
+WEB_BYPASSERS = {
+    "noop": {
+        "name": "No Operation Bypasser",
+        "path": "web_bypassers.base.NoOpBypasser",
+    },
+    "cloudflare": {
+        "name": "Cloudflare Bypasser",
+        "path": "web_bypassers.cloudflare.CloudflareWebBypasser",
+        "kwargs": lambda: {
+            "virtual_screen_size": (1024, 768),
+            "recording_dir": _create_recording_dir() if DEBUG else LOG_DIR / "recording",
+            "driver": get_env("CF_BYPASS_DRIVER", "chrome"),
+            "headless": _string_to_bool(get_env("CF_BYPASS_HEADLESS", "true")),
+            "timeout": int(get_env("CF_BYPASS_TIMEOUT", "10")),
+        },
+    },
+    "external": {
+        "name": "External Bypasser",
+        "path": "web_bypassers.external.ExternalWebBypasser",
+        "kwargs": lambda: {
+            "url": get_env("EXT_BYPASSER_URL", ""),
+            "timeout": int(get_env("EXT_BYPASSER_TIMEOUT", "60000")),
+        },
+    },
+}
+
+# Backwards compatibility for USE_CF_BYPASS
+def _get_default_web_bypasser():
+    if "DEFAULT_WEB_BYPASSER" in os.environ:
+        return get_env("DEFAULT_WEB_BYPASSER", "cloudflare")
+
+    if "USE_CF_BYPASS" in os.environ and _string_to_bool(get_env("USE_CF_BYPASS", "true")):
+        return "cloudflare"
+
+    if "USING_EXTERNAL_BYPASSER" in os.environ and _string_to_bool(
+        get_env("USING_EXTERNAL_BYPASSER", "false"),
+    ):
+        return "external"
+    return "noop"
+
+
+DEFAULT_WEB_BYPASSER = _get_default_web_bypasser()
+if DEFAULT_WEB_BYPASSER not in WEB_BYPASSERS:
+    msg = (
+        "Invalid DEFAULT_WEB_BYPASSER configuration: "
+        f"{DEFAULT_WEB_BYPASSER}, key must be of {', '.join([f'`{k}' for k in WEB_BYPASSERS])}"
+    )
+    logger.error(msg)
+    raise ValueError(msg)
+
 
 # ==============================================================================
 # NETWORK SETTINGS
@@ -202,9 +292,9 @@ if not USING_EXTERNAL_BYPASSER:
 HTTP_PROXY = get_env("HTTP_PROXY", "")
 HTTPS_PROXY = get_env("HTTPS_PROXY", "")
 PROXIES = {}
-if HTTP_PROXY:
+if HTTP_PROXY.strip() != "":
     PROXIES["http"] = HTTP_PROXY
-if HTTPS_PROXY:
+if HTTPS_PROXY.strip() != "":
     PROXIES["https"] = HTTPS_PROXY
 
 # Tor settings
@@ -280,8 +370,11 @@ CUSTOM_SCRIPT = get_env("CUSTOM_SCRIPT", "")
 # Validate custom script
 if CUSTOM_SCRIPT:
     if not Path(CUSTOM_SCRIPT).exists():
-        logger.warning("CUSTOM_SCRIPT %s does not exist", CUSTOM_SCRIPT)
-        CUSTOM_SCRIPT = ""
+        msg = f"CUSTOM_SCRIPT {CUSTOM_SCRIPT} does not exist"
+        logger.warning(msg)
+        raise ValueError(msg)
+
     elif not os.access(CUSTOM_SCRIPT, os.X_OK):
-        logger.warning("CUSTOM_SCRIPT %s is not executable", CUSTOM_SCRIPT)
-        CUSTOM_SCRIPT = ""
+        msg = f"CUSTOM_SCRIPT {CUSTOM_SCRIPT} is not executable"
+        logger.warning(msg)
+        raise ValueError(msg)

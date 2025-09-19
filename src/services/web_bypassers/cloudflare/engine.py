@@ -1,40 +1,42 @@
-import time
+
 import os
-import socket
-from urllib.parse import urlparse
-import threading
 import signal
-from datetime import datetime
+import socket
 import subprocess
-import requests
+import threading
+import time
+from datetime import datetime
 from typing import Optional
+from urllib.parse import urlparse
+
+import requests
+from selenium.common.exceptions import TimeoutException
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
 
 # --- SeleniumBase Import ---
 from seleniumbase import Driver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException
 
 import src.services.network as network
-from src.config.logging import setup_logger
 from config.settings import (
-    LOG_DIR,
-    DEBUG,
-    MAX_RETRY,
-    DEFAULT_SLEEP,
-    PROXIES,
+    BYPASS_RELEASE_INACTIVE_MIN,
     CUSTOM_DNS,
+    DEBUG,
+    DEFAULT_SLEEP,
+    DOCKERMODE,
     DOH_SERVER,
-    VIRTUAL_SCREEN_SIZE,
-    RECORDING_DIR,
+    ENABLE_LOGGING,
+    LOG_DIR,
     LOG_FILE,
     LOG_LEVEL,
-    ENABLE_LOGGING,
-    DOCKERMODE,
+    MAX_RETRY,
+    PROXIES,
+    RECORDING_DIR,
     USE_CF_BYPASS,
-    BYPASS_RELEASE_INACTIVE_MIN,
+    VIRTUAL_SCREEN_SIZE,
 )
+from src.config.logging import setup_logger
 
 logger = setup_logger(__name__, LOG_FILE, LOG_LEVEL, ENABLE_LOGGING)
 network.init()

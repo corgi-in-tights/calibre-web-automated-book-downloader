@@ -4,11 +4,11 @@ from flask import Flask
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from conf import settings
+from services.book_service import create_runtime_services
 from utils import setup_logger
 from utils.import_utils import load_module_by_name
 from utils.logger_utils import get_logger
 
-BLUEPRINT_PATHS = ["app.api", "app.frontend"]
 
 def create_app():
     """Create and configure Flask application."""
@@ -29,10 +29,12 @@ def create_app():
     app.logger.handlers = logger.handlers
     app.logger.setLevel(logger.level)
 
-    blueprint_paths = BLUEPRINT_PATHS.copy() + (["app.debug"] if settings.DEBUG else [])
+    create_runtime_services()
+
+    blueprint_paths = settings.ENABLED_FLASK_BLUEPRINTS
     for bp_path in blueprint_paths:
         try:
-            bp_module = load_module_by_name(bp_path)
+            bp_module = load_module_by_name("app." + bp_path)
         except ImportError:
             logger.exception("Failed to load blueprint module %s", bp_path)
             continue

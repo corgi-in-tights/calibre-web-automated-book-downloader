@@ -7,7 +7,7 @@ from werkzeug.wrappers import Response
 
 from app.auth import login_required
 from models import SearchFilters
-from services import backend
+from services import book_service
 
 bp = Blueprint("api", __name__, url_prefix="/api")
 logger = logging.getLogger(__name__)
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 def api_status_view() -> Response | tuple[Response, int]:
     """Get current download queue status."""
     try:
-        status = backend.queue_status()
+        status = book_service.queue_status()
         return jsonify(status)
     except Exception as e:
         logger.exception("Status error")
@@ -49,7 +49,7 @@ def api_search_view() -> Response | tuple[Response, int]:
         return jsonify([])
 
     try:
-        books = backend.search_books(query, filters)
+        books = book_service.search_books(query, filters)
         return jsonify(books)
     except Exception as e:
         logger.exception("Failed to search for book")
@@ -65,7 +65,7 @@ def api_info_view() -> Response | tuple[Response, int]:
         return jsonify({"error": "No book ID provided"}), 400
 
     try:
-        book = backend.get_book_info(book_id)
+        book = book_service.get_book_info(book_id)
         if book:
             return jsonify(book)
         return jsonify({"error": "Book not found"}), 404
